@@ -4,11 +4,306 @@
 
 ## Project Overview
 
-**TasteTrust** is a food and restaurant review platform designed to help users discover, rate, and share dining experiences. The platform aims to build trust through verified reviews and personalized recommendations.
+**TasteTrust** is a social platform for sharing restaurant recommendations and favourite dishes. The core concept is trust-based recommendations: users follow people whose taste they trust, rather than relying on generic crowd-sourced rankings.
 
-### Repository Status
+### Core Value Proposition
 
-This is a **new project** currently in the initial setup phase. The repository structure and codebase will be built incrementally.
+Users arrive in a city and instantly see personalised recommendations from people they trust, knowing exactly which restaurant to visit and what to order.
+
+---
+
+## Tech Stack
+
+### Frontend
+- **Framework**: Next.js 14+ with App Router
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **Maps**: Mapbox GL JS or Leaflet with OpenStreetMap
+- **State Management**: Zustand or React Context
+- **Forms**: React Hook Form with Zod validation
+
+### Backend
+- **API**: Next.js API Routes
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js (Google, email/password)
+- **Image Storage**: Cloudinary or AWS S3
+- **Search**: PostgreSQL full-text search
+
+---
+
+## Project Structure
+
+```
+TasteTrust/
+├── CLAUDE.md                    # AI assistant guidelines (this file)
+├── README.md                    # Project documentation
+├── package.json                 # Dependencies and scripts
+├── next.config.js               # Next.js configuration
+├── tailwind.config.ts           # Tailwind CSS configuration
+├── tsconfig.json                # TypeScript configuration
+├── .env.example                 # Environment variable template
+├── .env.local                   # Local environment variables (gitignored)
+├── .gitignore                   # Git ignore rules
+│
+├── prisma/
+│   ├── schema.prisma            # Database schema
+│   ├── migrations/              # Database migrations
+│   └── seed.ts                  # Database seeding script
+│
+├── src/
+│   ├── app/                     # Next.js App Router
+│   │   ├── layout.tsx           # Root layout
+│   │   ├── page.tsx             # Home page
+│   │   ├── globals.css          # Global styles
+│   │   │
+│   │   ├── (auth)/              # Auth route group
+│   │   │   ├── login/page.tsx
+│   │   │   └── register/page.tsx
+│   │   │
+│   │   ├── (main)/              # Main app route group
+│   │   │   ├── layout.tsx       # Main layout with nav
+│   │   │   ├── explore/page.tsx # City exploration
+│   │   │   ├── feed/page.tsx    # Activity feed
+│   │   │   ├── saved/page.tsx   # Saved restaurants
+│   │   │   │
+│   │   │   ├── restaurant/
+│   │   │   │   └── [id]/page.tsx
+│   │   │   │
+│   │   │   ├── profile/
+│   │   │   │   └── [username]/page.tsx
+│   │   │   │
+│   │   │   └── add/             # Add recommendation flow
+│   │   │       └── page.tsx
+│   │   │
+│   │   └── api/                 # API Routes
+│   │       ├── auth/[...nextauth]/route.ts
+│   │       ├── users/
+│   │       ├── restaurants/
+│   │       ├── recommendations/
+│   │       ├── dishes/
+│   │       ├── saved/
+│   │       └── search/
+│   │
+│   ├── components/
+│   │   ├── ui/                  # shadcn/ui components
+│   │   ├── layout/              # Layout components
+│   │   │   ├── Header.tsx
+│   │   │   ├── BottomNav.tsx
+│   │   │   └── Sidebar.tsx
+│   │   ├── restaurant/          # Restaurant components
+│   │   │   ├── RestaurantCard.tsx
+│   │   │   ├── RestaurantList.tsx
+│   │   │   └── RestaurantMap.tsx
+│   │   ├── recommendation/      # Recommendation components
+│   │   ├── user/                # User/profile components
+│   │   └── forms/               # Form components
+│   │
+│   ├── lib/
+│   │   ├── prisma.ts            # Prisma client instance
+│   │   ├── auth.ts              # NextAuth configuration
+│   │   ├── utils.ts             # Utility functions
+│   │   └── validations.ts       # Zod schemas
+│   │
+│   ├── hooks/                   # Custom React hooks
+│   │   ├── useUser.ts
+│   │   ├── useRestaurants.ts
+│   │   └── useRecommendations.ts
+│   │
+│   ├── stores/                  # Zustand stores
+│   │   └── useAppStore.ts
+│   │
+│   └── types/                   # TypeScript types
+│       └── index.ts
+│
+├── public/                      # Static assets
+│   └── images/
+│
+└── tests/                       # Test files
+    ├── unit/
+    └── integration/
+```
+
+---
+
+## Database Schema
+
+### Core Entities
+
+```prisma
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  username    String   @unique
+  displayName String   @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  bio         String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  followers     Follow[] @relation("following")
+  following     Follow[] @relation("follower")
+  restaurants   Restaurant[]
+  dishes        Dish[]
+  recommendations Recommendation[]
+  savedRestaurants SavedRestaurant[]
+
+  @@map("users")
+}
+
+model Follow {
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("follower", fields: [followerId], references: [id])
+  following User @relation("following", fields: [followingId], references: [id])
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+model Restaurant {
+  id            String   @id @default(uuid())
+  name          String
+  address       String
+  city          String
+  country       String
+  latitude      Float
+  longitude     Float
+  cuisineType   String   @map("cuisine_type")
+  priceRange    Int      @map("price_range") // 1-4
+  googlePlaceId String?  @map("google_place_id")
+  createdById   String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  dishes          Dish[]
+  recommendations Recommendation[]
+  savedBy         SavedRestaurant[]
+
+  @@map("restaurants")
+}
+
+model Dish {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  name         String
+  description  String?
+  photoUrl     String?  @map("photo_url")
+  createdById  String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id])
+  createdBy           User                 @relation(fields: [createdById], references: [id])
+  dishRecommendations DishRecommendation[]
+
+  @@map("dishes")
+}
+
+model Recommendation {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  restaurantId String    @map("restaurant_id")
+  rating       Int       // 1-5
+  reviewText   String?   @map("review_text")
+  visitDate    DateTime? @map("visit_date")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user                User                 @relation(fields: [userId], references: [id])
+  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id])
+  dishRecommendations DishRecommendation[]
+
+  @@map("recommendations")
+}
+
+model DishRecommendation {
+  id               String  @id @default(uuid())
+  recommendationId String  @map("recommendation_id")
+  dishId           String  @map("dish_id")
+  isMustTry        Boolean @default(false) @map("is_must_try")
+  notes            String?
+
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id])
+  dish           Dish           @relation(fields: [dishId], references: [id])
+
+  @@map("dish_recommendations")
+}
+
+model SavedRestaurant {
+  userId       String   @map("user_id")
+  restaurantId String   @map("restaurant_id")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user       User       @relation(fields: [userId], references: [id])
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@id([userId, restaurantId])
+  @@map("saved_restaurants")
+}
+```
+
+---
+
+## API Endpoints
+
+### Authentication
+```
+POST /api/auth/register
+POST /api/auth/login
+GET  /api/auth/session
+```
+
+### Users
+```
+GET    /api/users/:username
+PUT    /api/users/:username
+GET    /api/users/:username/recommendations
+GET    /api/users/:username/saved
+GET    /api/users/:username/followers
+GET    /api/users/:username/following
+POST   /api/users/:username/follow
+DELETE /api/users/:username/follow
+```
+
+### Restaurants
+```
+GET  /api/restaurants?city=&cuisine=&priceRange=
+GET  /api/restaurants/:id
+POST /api/restaurants
+GET  /api/restaurants/:id/recommendations
+GET  /api/restaurants/:id/dishes
+```
+
+### Recommendations
+```
+GET    /api/recommendations?city=&followingOnly=true
+POST   /api/recommendations
+PUT    /api/recommendations/:id
+DELETE /api/recommendations/:id
+```
+
+### Dishes
+```
+POST /api/dishes
+GET  /api/dishes/:id
+```
+
+### Saved
+```
+GET    /api/saved
+POST   /api/saved/:restaurantId
+DELETE /api/saved/:restaurantId
+```
+
+### Search
+```
+GET /api/search/users?q=
+GET /api/search/restaurants?q=&city=
+GET /api/search/cities?q=
+```
 
 ---
 
@@ -17,9 +312,9 @@ This is a **new project** currently in the initial setup phase. The repository s
 ### Prerequisites
 
 - **Node.js**: v18.x or higher (LTS recommended)
-- **npm**: v9.x or higher (or yarn/pnpm)
+- **npm**: v9.x or higher
+- **PostgreSQL**: v14 or higher
 - **Git**: v2.x or higher
-- **Database**: PostgreSQL 14+ (recommended) or SQLite for development
 
 ### Initial Setup
 
@@ -32,114 +327,182 @@ cd TasteTrust
 npm install
 
 # Set up environment variables
-cp .env.example .env
-# Edit .env with your local configuration
+cp .env.example .env.local
+# Edit .env.local with your configuration
 
-# Run database migrations
-npm run db:migrate
+# Set up the database
+npx prisma generate
+npx prisma db push  # Development
+# OR
+npx prisma migrate dev  # With migrations
+
+# Seed the database (optional)
+npx prisma db seed
 
 # Start development server
 npm run dev
 ```
 
----
+### Environment Variables
 
-## Project Structure (Recommended)
+```bash
+# Application
+NODE_ENV=development
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key-min-32-chars
 
-```
-TasteTrust/
-├── CLAUDE.md                 # AI assistant guidelines (this file)
-├── README.md                 # Project documentation
-├── package.json              # Dependencies and scripts
-├── tsconfig.json             # TypeScript configuration
-├── .env.example              # Environment variable template
-├── .gitignore                # Git ignore rules
-│
-├── src/                      # Source code
-│   ├── api/                  # API routes and controllers
-│   │   ├── routes/           # Route definitions
-│   │   ├── controllers/      # Request handlers
-│   │   └── middleware/       # Express/API middleware
-│   │
-│   ├── models/               # Database models/schemas
-│   │   ├── User.ts
-│   │   ├── Restaurant.ts
-│   │   ├── Review.ts
-│   │   └── index.ts
-│   │
-│   ├── services/             # Business logic layer
-│   │   ├── auth/             # Authentication services
-│   │   ├── reviews/          # Review management
-│   │   └── restaurants/      # Restaurant services
-│   │
-│   ├── utils/                # Utility functions
-│   │   ├── validation.ts     # Input validation helpers
-│   │   ├── errors.ts         # Custom error classes
-│   │   └── helpers.ts        # General utilities
-│   │
-│   ├── types/                # TypeScript type definitions
-│   │   └── index.ts
-│   │
-│   ├── config/               # Configuration files
-│   │   ├── database.ts
-│   │   └── app.ts
-│   │
-│   └── index.ts              # Application entry point
-│
-├── tests/                    # Test files
-│   ├── unit/                 # Unit tests
-│   ├── integration/          # Integration tests
-│   └── fixtures/             # Test data/fixtures
-│
-├── scripts/                  # Build and utility scripts
-│   ├── seed.ts               # Database seeding
-│   └── migrate.ts            # Migration runner
-│
-├── docs/                     # Additional documentation
-│   └── api.md                # API documentation
-│
-└── public/                   # Static assets (if applicable)
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/tastetrust
+
+# OAuth Providers
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Image Storage (Cloudinary)
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+
+# Maps (Mapbox)
+NEXT_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
 ```
 
 ---
 
 ## Coding Conventions
 
-### Language & Style
+### TypeScript
 
-- **Language**: TypeScript (strict mode enabled)
-- **Style Guide**: Follow ESLint + Prettier configuration
-- **Formatting**: 2-space indentation, single quotes, no semicolons (configurable)
+- Strict mode enabled
+- Prefer interfaces over types for object shapes
+- Use explicit return types on functions
+- Avoid `any` - use `unknown` when type is truly unknown
 
 ### Naming Conventions
 
 | Type | Convention | Example |
 |------|------------|---------|
-| Files (components) | PascalCase | `ReviewCard.tsx` |
-| Files (utilities) | camelCase | `formatDate.ts` |
-| Variables/Functions | camelCase | `getUserReviews()` |
-| Constants | UPPER_SNAKE_CASE | `MAX_RATING_VALUE` |
-| Types/Interfaces | PascalCase | `interface UserProfile` |
-| Database tables | snake_case | `user_reviews` |
-| API endpoints | kebab-case | `/api/v1/user-reviews` |
+| React Components | PascalCase | `RestaurantCard.tsx` |
+| Utility files | camelCase | `formatDate.ts` |
+| Variables/Functions | camelCase | `getRestaurants()` |
+| Constants | UPPER_SNAKE_CASE | `MAX_RATING` |
+| Types/Interfaces | PascalCase | `interface Restaurant` |
+| Database tables | snake_case | `saved_restaurants` |
+| API routes | kebab-case dirs | `/api/users/[username]` |
+| CSS classes | kebab-case | `restaurant-card` |
 
-### Code Organization
+### Component Structure
 
-1. **Imports order**:
-   - External dependencies
-   - Internal modules (absolute paths)
-   - Relative imports
-   - Type imports (at the end)
+```tsx
+// 1. Imports (external, then internal, then types)
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import type { Restaurant } from '@/types'
 
-2. **Function structure**:
-   - Keep functions small and focused (< 50 lines ideal)
-   - Use early returns to reduce nesting
-   - Document complex logic with inline comments
+// 2. Types/Interfaces
+interface RestaurantCardProps {
+  restaurant: Restaurant
+  onSave?: () => void
+}
 
-3. **Error handling**:
-   - Use custom error classes for domain-specific errors
-   - Always handle async errors with try/catch or `.catch()`
-   - Log errors appropriately before re-throwing
+// 3. Component
+export function RestaurantCard({ restaurant, onSave }: RestaurantCardProps) {
+  // Hooks first
+  const [isSaved, setIsSaved] = useState(false)
+
+  // Handlers
+  const handleSave = () => {
+    setIsSaved(true)
+    onSave?.()
+  }
+
+  // Render
+  return (
+    <div className="restaurant-card">
+      {/* ... */}
+    </div>
+  )
+}
+```
+
+### API Route Structure
+
+```typescript
+// src/app/api/restaurants/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const city = searchParams.get('city')
+
+    const restaurants = await prisma.restaurant.findMany({
+      where: city ? { city } : undefined,
+    })
+
+    return NextResponse.json({ data: restaurants })
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch restaurants' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    // Validate with Zod, create restaurant...
+
+    return NextResponse.json({ data: restaurant }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to create restaurant' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+---
+
+## UI/UX Guidelines
+
+### Design Principles
+
+- **Clean & Modern**: Minimalist design, generous white space
+- **Mobile-First**: Design for mobile, scale up for desktop
+- **Typography**: Inter font family
+- **Colour Palette**:
+  - Primary: Warm terracotta/coral `#E07A5F`
+  - Neutral: Warm greys
+  - Accent: For ratings and highlights
+- **Imagery**: Focus on food photography, rounded corners
+
+### Responsive Breakpoints
+
+```css
+/* Tailwind defaults */
+sm: 640px   /* Small devices */
+md: 768px   /* Tablets */
+lg: 1024px  /* Desktops */
+xl: 1280px  /* Large desktops */
+```
+
+### Key UI Components
+
+- **Bottom Navigation** (mobile): Home, Explore, Add, Saved, Profile
+- **Floating Action Button**: Quick add recommendation
+- **Bottom Sheet**: Restaurant preview on map tap
+- **Cards**: Restaurant cards with image, rating, cuisine, price
 
 ---
 
@@ -148,255 +511,52 @@ TasteTrust/
 ### Branch Naming
 
 ```
-feature/   - New features (feature/add-review-photos)
-fix/       - Bug fixes (fix/rating-calculation)
-refactor/  - Code refactoring (refactor/auth-service)
-docs/      - Documentation (docs/api-endpoints)
-test/      - Test additions (test/review-service)
-claude/    - AI-assisted work branches
+feature/   - New features (feature/add-recommendation-flow)
+fix/       - Bug fixes (fix/map-marker-clustering)
+refactor/  - Code refactoring
+docs/      - Documentation updates
+claude/    - AI-assisted development
 ```
 
 ### Commit Messages
 
-Follow conventional commits format:
+Follow conventional commits:
 
 ```
-type(scope): description
-
-[optional body]
-
-[optional footer]
+feat(restaurants): add map view with clustering
+fix(auth): resolve Google OAuth callback error
+docs(api): document recommendation endpoints
+style(ui): update restaurant card hover states
+refactor(hooks): extract useRestaurants logic
+test(api): add restaurant endpoint tests
+chore(deps): update Next.js to 14.1
 ```
-
-**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-**Examples**:
-```
-feat(reviews): add photo upload capability
-fix(auth): resolve token refresh race condition
-docs(api): update endpoint documentation
-test(services): add review service unit tests
-```
-
-### Pull Request Guidelines
-
-1. Keep PRs focused and reasonably sized
-2. Include description of changes and testing done
-3. Reference related issues when applicable
-4. Ensure all tests pass before requesting review
 
 ---
 
-## Testing Guidelines
+## Testing
+
+### Commands
+
+```bash
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+npm run test:coverage # With coverage report
+```
 
 ### Test Structure
 
 ```typescript
-describe('ReviewService', () => {
-  describe('createReview', () => {
-    it('should create a review with valid data', async () => {
+describe('RestaurantService', () => {
+  describe('getByCity', () => {
+    it('should return restaurants for a given city', async () => {
       // Arrange
       // Act
       // Assert
     })
-
-    it('should throw error for invalid rating', async () => {
-      // ...
-    })
   })
 })
 ```
-
-### Testing Commands
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run specific test file
-npm test -- path/to/test.spec.ts
-```
-
-### Coverage Requirements
-
-- Minimum 80% code coverage for new code
-- Critical paths (auth, payments) require 90%+ coverage
-
----
-
-## API Design Guidelines
-
-### RESTful Conventions
-
-```
-GET    /api/v1/restaurants          # List restaurants
-GET    /api/v1/restaurants/:id      # Get single restaurant
-POST   /api/v1/restaurants          # Create restaurant
-PUT    /api/v1/restaurants/:id      # Update restaurant
-DELETE /api/v1/restaurants/:id      # Delete restaurant
-
-GET    /api/v1/restaurants/:id/reviews    # Nested resource
-```
-
-### Response Format
-
-```json
-{
-  "success": true,
-  "data": { ... },
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total": 100
-  }
-}
-```
-
-### Error Response Format
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid input data",
-    "details": [
-      { "field": "rating", "message": "Rating must be between 1 and 5" }
-    ]
-  }
-}
-```
-
----
-
-## Database Guidelines
-
-### Migration Practices
-
-- Always create migrations for schema changes
-- Never modify existing migrations after deployment
-- Use descriptive migration names: `20240101_add_photo_url_to_reviews.ts`
-
-### Query Optimization
-
-- Use indexes for frequently queried columns
-- Avoid N+1 queries - use eager loading when appropriate
-- Use pagination for list endpoints
-
-### Data Models (Core Entities)
-
-**User**
-- id, email, password_hash, display_name, avatar_url
-- created_at, updated_at
-
-**Restaurant**
-- id, name, description, address, cuisine_type
-- latitude, longitude, phone, website
-- average_rating, review_count
-- created_at, updated_at
-
-**Review**
-- id, user_id, restaurant_id
-- rating (1-5), title, content
-- photos (array), helpful_count
-- created_at, updated_at
-
----
-
-## Security Guidelines
-
-### Authentication
-
-- Use JWT tokens with appropriate expiration
-- Implement refresh token rotation
-- Hash passwords with bcrypt (cost factor 12+)
-
-### Input Validation
-
-- Validate all user input on server side
-- Sanitize data before database operations
-- Use parameterized queries to prevent SQL injection
-
-### Sensitive Data
-
-- Never commit secrets or API keys
-- Use environment variables for configuration
-- Implement rate limiting on public endpoints
-
----
-
-## Environment Variables
-
-Required environment variables:
-
-```bash
-# Application
-NODE_ENV=development
-PORT=3000
-API_VERSION=v1
-
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/tastetrust
-
-# Authentication
-JWT_SECRET=your-secret-key
-JWT_EXPIRY=1h
-REFRESH_TOKEN_EXPIRY=7d
-
-# External Services (as needed)
-# CLOUDINARY_URL=...
-# SENDGRID_API_KEY=...
-```
-
----
-
-## Common Tasks for AI Assistants
-
-### When Adding a New Feature
-
-1. Understand the existing codebase structure
-2. Create necessary model/schema changes
-3. Implement service layer logic
-4. Add API routes/controllers
-5. Write tests (unit and integration)
-6. Update documentation if needed
-
-### When Fixing a Bug
-
-1. Reproduce the issue locally
-2. Write a failing test that captures the bug
-3. Implement the fix
-4. Verify the test passes
-5. Check for regression in related areas
-
-### When Refactoring
-
-1. Ensure comprehensive test coverage exists
-2. Make incremental changes
-3. Run tests after each change
-4. Maintain backwards compatibility unless explicitly breaking
-
----
-
-## Important Notes
-
-1. **No Over-Engineering**: Keep solutions simple. Don't add abstractions until needed.
-
-2. **Security First**: Always consider security implications of changes.
-
-3. **Test Coverage**: Maintain high test coverage, especially for critical paths.
-
-4. **Documentation**: Update relevant docs when making significant changes.
-
-5. **Performance**: Consider query performance and API response times.
-
-6. **Accessibility**: Follow accessibility best practices for any UI work.
 
 ---
 
@@ -404,29 +564,64 @@ REFRESH_TOKEN_EXPIRY=7d
 
 ```bash
 # Development
-npm run dev              # Start dev server
-npm run build            # Build for production
-npm run lint             # Run linter
-npm run format           # Format code
+npm run dev           # Start dev server (port 3000)
+npm run build         # Build for production
+npm run start         # Start production server
+npm run lint          # Run ESLint
+npm run format        # Format with Prettier
 
 # Database
-npm run db:migrate       # Run migrations
-npm run db:seed          # Seed database
-npm run db:reset         # Reset database
+npx prisma generate   # Generate Prisma client
+npx prisma db push    # Push schema changes (dev)
+npx prisma migrate dev # Create migration
+npx prisma studio     # Open Prisma Studio GUI
+npx prisma db seed    # Seed database
 
 # Testing
-npm test                 # Run tests
-npm run test:watch       # Watch mode
-npm run test:coverage    # With coverage
+npm test              # Run tests
+npm run test:coverage # With coverage
 ```
 
 ---
 
-## Contact & Resources
+## Implementation Phases
 
-- **Repository**: TasteTrust on GitHub
-- **Issue Tracker**: GitHub Issues
-- **Documentation**: `/docs` directory
+### Phase 1: Foundation (Current)
+- [x] Project setup with Next.js + TypeScript
+- [x] Tailwind CSS and shadcn/ui configuration
+- [x] PostgreSQL + Prisma schema
+- [x] NextAuth.js authentication
+- [x] Basic layouts
+
+### Phase 2: Core Features
+- [ ] User profiles and social graph
+- [ ] Restaurant CRUD
+- [ ] Recommendation system
+- [ ] Dish management with photos
+
+### Phase 3: Discovery
+- [ ] City-based restaurant listing
+- [ ] Map integration
+- [ ] Filtering and sorting
+- [ ] Search functionality
+
+### Phase 4: Polish
+- [ ] Activity feed
+- [ ] Saved/wishlist feature
+- [ ] Performance optimization
+- [ ] PWA capabilities
+
+---
+
+## Important Notes for AI Assistants
+
+1. **Mobile-First**: Always design and implement mobile view first, then scale up
+2. **Use shadcn/ui**: Leverage existing components, don't reinvent the wheel
+3. **Prisma Best Practices**: Use includes for relations, avoid N+1 queries
+4. **Server Components**: Use React Server Components by default, client components only when needed
+5. **Validation**: Use Zod schemas for all form and API validation
+6. **Error Handling**: Implement proper error boundaries and API error responses
+7. **No Over-Engineering**: Keep solutions simple and focused
 
 ---
 
